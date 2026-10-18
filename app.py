@@ -117,10 +117,16 @@ if "deadlock_available" not in st.session_state:
 # HELPER FUNCTIONS
 # ---------------------------------------------------------
 def matrix_df(matrix):
+    """Build a process matrix using the actual number of resource columns."""
+    resource_count = len(matrix[0]) if matrix else 0
+    columns = [
+        RESOURCE_NAMES[i] if i < len(RESOURCE_NAMES) else f"Resource {i + 1}"
+        for i in range(resource_count)
+    ]
     return pd.DataFrame(
         matrix,
         index=[f"P{i}" for i in range(len(matrix))],
-        columns=RESOURCE_NAMES,
+        columns=columns,
     )
 
 
@@ -134,8 +140,12 @@ def show_matrix(title, matrix):
 
 def show_vector(title, vector):
     st.markdown(f"**{title}**")
+    columns = [
+        RESOURCE_NAMES[i] if i < len(RESOURCE_NAMES) else f"Resource {i + 1}"
+        for i in range(len(vector))
+    ]
     st.dataframe(
-        pd.DataFrame([vector], columns=RESOURCE_NAMES),
+        pd.DataFrame([vector], columns=columns),
         hide_index=True,
         use_container_width=True,
     )
@@ -806,12 +816,19 @@ elif page == "Test Bench":
         except (ValueError, TypeError, IndexError):
             invalid_checks["Zero Available handled"] = False
 
-        zero_need = request_resources(
-            3, [0, 1, 1],
-            INITIAL_AVAILABLE, INITIAL_ALLOCATION, INITIAL_MAXIMUM,
+        # TC6 boundary case: a valid state in which every process has zero Need.
+        zero_need_allocation = deepcopy(INITIAL_MAXIMUM)
+        zero_need_result = safety_algorithm(
+            INITIAL_AVAILABLE,
+            zero_need_allocation,
+            INITIAL_MAXIMUM,
         )
         invalid_checks["Zero remaining Need"] = (
-            zero_need["status"] == "GRANTED"
+            zero_need_result["safe"]
+            and all(
+                all(value == 0 for value in row)
+                for row in zero_need_result["need"]
+            )
         )
 
         invalid_id = request_resources(
